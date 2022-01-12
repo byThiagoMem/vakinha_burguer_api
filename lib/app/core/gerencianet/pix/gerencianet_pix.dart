@@ -1,0 +1,61 @@
+import 'package:dio/dio.dart';
+import 'package:dotenv/dotenv.dart';
+
+import '../gerencianet_rest_client.dart';
+import 'models/billing_gerencianet_model.dart';
+import 'models/qr_code_gerencianet_model.dart';
+
+class GerencianetPix {
+  Future<BillingGerencianetModel> generateBilling(double value, String? cpf, String? name, int orderId) async {
+    try {
+      final gerencianetRestClient = GerencianetRestClient();
+
+      final billingData = {
+        'calendario': {'expiracao': 3600},
+        'devedor': {
+          'cpf': cpf,
+          'nome': name,
+        },
+        'valor': {'original': '$value'},
+        'chave': env['gerencianetChavePix'],
+        'solicitacaoPagador': 'pedido de número $orderId no vakinha burger',
+        'infoAdicionais': [
+          {'nome': 'orderId', 'valor': '$orderId'}
+        ]
+      };
+
+      final billingResponse = await gerencianetRestClient.auth().post(
+            '/v2/cob',
+            data: billingData,
+          );
+      final billingResponseData = billingResponse.data;
+
+      return BillingGerencianetModel(
+        transactionId: billingResponseData['txid'],
+        locationId: billingResponseData['loc']['id'],
+      );
+    } on DioError catch (e, s) {
+      print(e.response);
+      print(s);
+      rethrow;
+    }
+  }
+
+  Future<QrCodeGerencianetModel> getQrCode(int locationId) async {
+    try {
+      final gerencianetPix = GerencianetRestClient();
+      final qrResponse = await gerencianetPix.auth().get('/v2/loc/$locationId/qrcode');
+
+      final qrCodeResponseData = qrResponse.data;
+
+      return QrCodeGerencianetModel(
+        image: qrCodeResponseData['imagemQrcode'],
+        code: qrCodeResponseData['qrcode'],
+      );
+    } on DioError catch (e, s) {
+      print(e.response);
+      print(s);
+      rethrow;
+    }
+  }
+}
